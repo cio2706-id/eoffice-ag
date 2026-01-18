@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============ ENUMS ============
+
+enum Role {
+  STAFF
+  MANAGER
+  BENDAHARA
+  SEKERTARIS
+  KETUA
+}
+
+enum DocStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  WAITING
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StepType {
+  pemeriksa
+  signer
+}
+
+enum RecipientType {
+  USER
+  EXTERNAL
+}
+
+// ============ MODELS ============
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  documents Document[]
+  approvals Approval[]
+  inbox     Inbox[]
+}
+
+model Document {
+  id            String        @id @default(cuid())
+  title         String
+  number        String        @unique
+  status        DocStatus     @default(DRAFT)
+  content       String?
+  templateUrl   String?
+  recipient     String?
+  recipientType RecipientType?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  authorId   String
+  author     User       @relation(fields: [authorId], references: [id])
+  templateId String?
+  template   Template?  @relation(fields: [templateId], references: [id])
+  workflow   Approval[]
+  inbox      Inbox[]
+}
+
+model Approval {
+  id         String         @id @default(cuid())
+  order      Int
+  status     ApprovalStatus @default(PENDING)
+  role       Role
+  stepType   StepType       @default(pemeriksa)
+  comment    String?
+  actedAt    DateTime?
+  createdAt  DateTime       @default(now())
+
+  // Relations
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  documentId String
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Inbox {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type       String   @default("received")
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  fileName    String
+  filePath    String
+  fileType    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  documents Document[]
+}
