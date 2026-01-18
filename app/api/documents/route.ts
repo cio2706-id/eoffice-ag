@@ -40,7 +40,8 @@ export async function GET() {
                     {
                         workflow: {
                             some: {
-                                role: userRole,
+                                // Type assertion needed because session role is string but Prisma expects enum
+                                role: userRole as unknown as "STAFF" | "MANAGER" | "BENDAHARA" | "SEKERTARIS" | "KETUA",
                             },
                         },
                     },
