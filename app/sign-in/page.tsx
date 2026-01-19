@@ -27,19 +27,25 @@ function SignInForm() {
         setIsLoading(true);
 
         try {
+            console.log("Attempting sign in with:", email);
             const result = await signIn("credentials", {
                 email,
                 password,
                 redirect: false,
             });
 
+            console.log("Sign in result:", result);
+
             if (result?.error) {
-                setError("Invalid email or password");
-            } else {
+                setError(`Login failed: ${result.error}`);
+            } else if (result?.ok) {
                 router.push(callbackUrl);
                 router.refresh();
+            } else {
+                setError("Unknown error occurred");
             }
-        } catch {
+        } catch (err) {
+            console.error("Sign in error:", err);
             setError("An error occurred. Please try again.");
         } finally {
             setIsLoading(false);
