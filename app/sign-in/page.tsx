@@ -39,8 +39,8 @@ function SignInForm() {
             if (result?.error) {
                 setError(`Login failed: ${result.error}`);
             } else if (result?.ok) {
-                router.push(callbackUrl);
-                router.refresh();
+                // Use full page redirect to ensure session cookie is read properly
+                window.location.href = callbackUrl;
             } else {
                 setError("Unknown error occurred");
             }
