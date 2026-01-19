@@ -1,10 +1,9 @@
 "use client";
 
-import { Suspense } from "react";
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FileText, Loader2 } from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +14,7 @@ function SignInForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || "/";
+    const supabase = createSupabaseBrowserClient();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -27,19 +27,19 @@ function SignInForm() {
         setIsLoading(true);
 
         try {
-            console.log("Attempting sign in with:", email);
-            const result = await signIn("credentials", {
+            console.log("Attempting Supabase sign in with:", email);
+
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
-                redirect: false,
             });
 
-            console.log("Sign in result:", result);
+            console.log("Sign in result:", data, signInError);
 
-            if (result?.error) {
-                setError(`Login failed: ${result.error}`);
-            } else if (result?.ok) {
-                // Use full page redirect to ensure session cookie is read properly
+            if (signInError) {
+                setError(signInError.message);
+            } else if (data.user) {
+                // Success - redirect to callback URL
                 window.location.href = callbackUrl;
             } else {
                 setError("Unknown error occurred");
