@@ -1,29 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { createSupabaseServerClient } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // GET /api/templates - List all templates
 export async function GET() {
-    const session = await auth();
+    try {
+        const supabase = await createSupabaseServerClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-    if (!session?.user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const templates = await prisma.template.findMany({
+            orderBy: { createdAt: "desc" },
+        });
+
+        return NextResponse.json(templates);
+    } catch (error) {
+        console.error("Templates fetch error:", error);
+        return NextResponse.json({ error: "Failed to fetch templates" }, { status: 500 });
     }
-
-    const templates = await prisma.template.findMany({
-        orderBy: { createdAt: "desc" },
-    });
-
-    return NextResponse.json(templates);
 }
 
 // POST /api/templates - Upload new template
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
+        const supabase = await createSupabaseServerClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!session?.user) {
+        if (!user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

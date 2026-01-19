@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/inbox - List inbox items for current user
 export async function GET() {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = authResult.id;
 
     // Get all documents:
     // 1. Created by this user

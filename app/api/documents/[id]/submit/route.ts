@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/documents/[id]/submit - Submit draft for approval
@@ -7,9 +7,9 @@ export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -26,7 +26,7 @@ export async function POST(
     }
 
     // Check if user is the author
-    if (document.authorId !== session.user.id) {
+    if (document.authorId !== authResult.id) {
         return NextResponse.json(
             { error: "Only the document author can submit for approval" },
             { status: 403 }

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/users - List all users (for workflow assignment)
 export async function GET() {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

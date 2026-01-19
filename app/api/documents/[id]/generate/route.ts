@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
 import createReport from "docx-templates";
@@ -10,9 +10,9 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
+        const authResult = await getAuthenticatedUser();
 
-        if (!session?.user) {
+        if (!authResult) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

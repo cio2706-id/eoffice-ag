@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -8,9 +8,9 @@ export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -32,9 +32,9 @@ export async function DELETE(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

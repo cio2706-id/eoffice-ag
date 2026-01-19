@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 // PATCH /api/documents/[id] - Update document content
@@ -7,9 +7,9 @@ export async function PATCH(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -26,7 +26,7 @@ export async function PATCH(
     }
 
     // Only author can edit
-    if (document.authorId !== session.user.id) {
+    if (document.authorId !== authResult.id) {
         return NextResponse.json(
             { error: "Only the document author can edit" },
             { status: 403 }
@@ -61,9 +61,9 @@ export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

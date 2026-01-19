@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
+
+interface WorkflowStep {
+    status: string;
+    role: string;
+    stepType: string;
+    actedAt: Date | null;
+    user?: { name: string; role: string } | null;
+}
 
 // GET /api/documents/[id]/pdf - Generate PDF for approved document
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -32,8 +40,8 @@ export async function GET(
 
     // Generate simple HTML PDF content
     const approvalHistory = document.workflow
-        .filter((step) => step.status === "APPROVED")
-        .map((step) => `
+        .filter((step: WorkflowStep) => step.status === "APPROVED")
+        .map((step: WorkflowStep) => `
       <tr>
         <td style="padding: 8px; border: 1px solid #ddd;">${step.role}</td>
         <td style="padding: 8px; border: 1px solid #ddd;">${step.user?.name || "-"}</td>

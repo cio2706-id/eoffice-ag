@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/documents/[id]/approve - Approve current workflow step
@@ -7,9 +7,9 @@ export async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
+    const authResult = await getAuthenticatedUser();
 
-    if (!session?.user) {
+    if (!authResult) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -17,7 +17,7 @@ export async function POST(
     const body = await req.json();
     const { comment } = body;
 
-    const userRole = (session.user as { role?: string }).role;
+    const userRole = authResult.role;
 
     // Find the document and its current pending step
     const document = await prisma.document.findUnique({
@@ -50,7 +50,7 @@ export async function POST(
         where: { id: currentStep.id },
         data: {
             status: "APPROVED",
-            userId: session.user.id,
+            userId: authResult.id,
             comment: comment || null,
             actedAt: new Date(),
         },
