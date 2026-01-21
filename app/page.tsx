@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import {
   FileText,
@@ -18,6 +18,7 @@ import {
   User,
   Inbox
 } from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,11 +53,36 @@ interface Document {
 }
 
 export default function Dashboard() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null);
 
+  // Fetch current user
+  useEffect(() => {
+    async function fetchCurrentUser() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) {
+          const res = await fetch("/api/users");
+          if (res.ok) {
+            const users = await res.json();
+            const userData = users.find((u: { email: string }) => u.email === user.email);
+            if (userData) {
+              setCurrentUser(userData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch current user:", error);
+      }
+    }
+    fetchCurrentUser();
+  }, [supabase]);
+
+  // Fetch documents
   useEffect(() => {
     async function fetchDocuments() {
       try {
@@ -124,21 +150,24 @@ export default function Dashboard() {
               <Avatar>
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-indigo-100 text-indigo-700">
-                  {session?.user?.name?.charAt(0) || "U"}
+                  {currentUser?.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{session?.user?.name}</p>
-              <p className="text-xs text-slate-500">{session?.user?.email}</p>
+              <p className="text-sm font-medium">{currentUser?.name || "User"}</p>
+              <p className="text-xs text-slate-500">{currentUser?.email}</p>
               <Badge variant="secondary" className="mt-1 text-xs">
-                {(session?.user as { role?: string })?.role || "USER"}
+                {currentUser?.role || "USER"}
               </Badge>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
+            <DropdownMenuItem onClick={async () => {
+              await supabase.auth.signOut();
+              router.push("/sign-in");
+            }}>
               <LogOut className="mr-2 h-4 w-4" /> Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -152,7 +181,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Dashboard</h1>
             <p className="text-slate-500 dark:text-slate-400">
-              Welcome back, {session?.user?.name?.split(" ")[0]}!
+              Welcome back, {currentUser?.name?.split(" ")[0] || "User"}!
             </p>
           </div>
           <div className="flex items-center gap-2">
