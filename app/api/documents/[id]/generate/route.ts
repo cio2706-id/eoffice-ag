@@ -27,6 +27,7 @@ export async function POST(
                     orderBy: { order: "asc" },
                     include: { user: { select: { name: true, role: true } } },
                 },
+                template: true, // Include the template record
             },
         });
 
@@ -34,23 +35,41 @@ export async function POST(
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 
-        if (!document.templateUrl) {
+        if (!document.templateId || !document.template) {
             return NextResponse.json(
                 { error: "Document has no template" },
                 { status: 400 }
             );
         }
 
+        // Always use the ORIGINAL template file path from Template table
+        // NOT the document.templateUrl which might be a generated file
+        const originalTemplateUrl = document.template.filePath;
+        console.log("Using original template:", originalTemplateUrl);
+
         // Download the template from Supabase
-        const templateResponse = await fetch(document.templateUrl);
+        const templateResponse = await fetch(originalTemplateUrl);
         if (!templateResponse.ok) {
+            console.error("Template download failed:", templateResponse.status, templateResponse.statusText);
             return NextResponse.json(
-                { error: "Failed to download template" },
+                { error: `Failed to download template: ${templateResponse.status}` },
                 { status: 500 }
             );
         }
 
+        // Check content type
+        const contentType = templateResponse.headers.get("content-type");
+        console.log("Template content type:", contentType);
+
         const templateBuffer = await templateResponse.arrayBuffer();
+        console.log("Template buffer size:", templateBuffer.byteLength);
+
+        if (templateBuffer.byteLength < 100) {
+            return NextResponse.json(
+                { error: "Template file is too small or empty" },
+                { status: 500 }
+            );
+        }
 
         // Get signers from workflow
         const signers = document.workflow
@@ -90,6 +109,8 @@ export async function POST(
             // Content
             isi: document.content || "",
         };
+
+        console.log("Placeholder data:", placeholderData);
 
         // Process template with docx-templates
         const output = await createReport({
