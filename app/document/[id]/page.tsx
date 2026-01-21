@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
 import {
     ArrowLeft,
@@ -34,7 +33,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import OnlyOfficeEditor from "@/components/OnlyOfficeEditor";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
 
 interface Document {
     id: string;
@@ -62,7 +62,7 @@ interface Document {
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
-    const { data: session } = useSession();
+    const supabase = createSupabaseBrowserClient();
     const [document, setDocument] = useState<Document | null>(null);
     const [content, setContent] = useState("");
     const [isLoading, setIsLoading] = useState(true);
@@ -70,9 +70,34 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const [isSaving, setIsSaving] = useState(false);
     const [showRejectDialog, setShowRejectDialog] = useState(false);
     const [rejectComment, setRejectComment] = useState("");
+    const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: string } | null>(null);
 
-    const userRole = (session?.user as { role?: string })?.role;
+    const userRole = currentUser?.role;
 
+    // Fetch current user info
+    useEffect(() => {
+        async function fetchCurrentUser() {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user?.email) {
+                    // Fetch full user info from API
+                    const res = await fetch("/api/users");
+                    if (res.ok) {
+                        const users = await res.json();
+                        const currentUserData = users.find((u: { email: string }) => u.email === user.email);
+                        if (currentUserData) {
+                            setCurrentUser(currentUserData);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch current user:", error);
+            }
+        }
+        fetchCurrentUser();
+    }, [supabase]);
+
+    // Fetch document
     useEffect(() => {
         async function fetchDocument() {
             try {
@@ -129,7 +154,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         (step) => step.status === "PENDING" && step.role === userRole
     );
 
-    const isAuthor = document?.authorId === session?.user?.id;
+    const isAuthor = document?.authorId === currentUser?.id;
     const isDraft = document?.status === "DRAFT";
     const hasTemplate = document?.templateId;
 
@@ -431,68 +456,89 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                         </div>
                     )}
 
-                    {/* The Editor - OnlyOffice or Textarea */}
-                    {document.templateUrl ? (
-                        <div className="w-full h-[800px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 overflow-hidden">
-                            <OnlyOfficeEditor
-                                documentUrl={document.templateUrl}
-                                documentKey={`doc_${document.id}_${Date.now()}`}
-                                documentTitle={document.title}
-                                documentType="word"
-                                mode={isDraft && isAuthor ? "edit" : "view"}
-                                userEmail={session?.user?.email || "user@example.com"}
-                                userName={session?.user?.name || "User"}
-                            />
-                        </div>
-                    ) : (
-                        <div className="w-[816px] min-h-[1056px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 dark:bg-white dark:ring-slate-800">
-                            <div className="w-full h-full flex flex-col">
-                                {/* Fake Toolbar */}
-                                <div className="h-auto border-b bg-[#f9fbfd] p-2 flex flex-col gap-2">
-                                    <div className="flex items-center gap-4 text-xs text-slate-600 px-2">
-                                        <span>File</span><span>Edit</span><span>View</span><span>Insert</span><span>Format</span><span>Tools</span>
+                    {/* The Editor - Simple Textarea for content editing */}
+                    <div className="w-[816px] min-h-[1056px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 dark:bg-white dark:ring-slate-800">
+                        <div className="w-full h-full flex flex-col">
+                            {/* Header with Title and Actions */}
+                            <div className="h-auto border-b bg-[#f9fbfd] p-4 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-slate-800">{document.title}</h2>
+                                        <p className="text-xs text-slate-500">
+                                            {document.number} • Created by {document.author.name}
+                                        </p>
                                     </div>
-                                    <div className="flex items-center gap-2 px-2 pb-1">
-                                        <div className="h-6 w-24 bg-slate-200 rounded" />
-                                        <div className="h-6 w-6 bg-slate-200 rounded" />
-                                        <div className="h-6 w-6 bg-slate-200 rounded" />
-                                        <div className="h-6 w-32 bg-slate-200 rounded" />
+                                    <div className="flex items-center gap-2">
+                                        {hasTemplate && document.templateUrl && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                            >
+                                                <a href={document.templateUrl} target="_blank" download>
+                                                    <Download size={14} className="mr-1" />
+                                                    Download Document
+                                                </a>
+                                            </Button>
+                                        )}
+                                        {hasTemplate && isAuthor && isDraft && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleRegenerate}
+                                                disabled={isActing}
+                                            >
+                                                {isActing ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                                                Update Placeholders
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
+                                {hasTemplate && (
+                                    <div className="text-xs text-indigo-600 bg-indigo-50 px-3 py-2 rounded-md">
+                                        📄 This document uses a template. Edit the content below, then click &quot;Update Placeholders&quot; to regenerate the document with your changes.
+                                    </div>
+                                )}
+                            </div>
 
-                                {/* Content */}
-                                <div className="p-12 space-y-4 flex-1">
-                                    <h1 className="text-3xl font-bold text-slate-900">{document.title}</h1>
-                                    <p className="text-sm text-slate-500">
-                                        Created by {document.author.name} • {document.number}
+                            {/* Content Editor */}
+                            <div className="p-8 space-y-4 flex-1">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Isi Surat (Document Content)
+                                </label>
+                                {isDraft && isAuthor ? (
+                                    <textarea
+                                        className="w-full min-h-[500px] p-4 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 leading-relaxed"
+                                        placeholder="Ketik isi surat di sini...
+
+Contoh:
+Dengan hormat,
+
+Bersama surat ini kami sampaikan bahwa...
+
+Demikian surat ini kami sampaikan, atas perhatian dan kerjasamanya kami ucapkan terima kasih."
+                                        value={content}
+                                        onChange={(e) => setContent(e.target.value)}
+                                    />
+                                ) : document.content ? (
+                                    <div className="p-4 border rounded-lg bg-slate-50">
+                                        <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{document.content}</p>
+                                    </div>
+                                ) : (
+                                    <div className="p-4 border rounded-lg bg-slate-50 text-slate-400 italic">
+                                        Belum ada isi surat...
+                                    </div>
+                                )}
+
+                                {/* Save reminder */}
+                                {isDraft && isAuthor && (
+                                    <p className="text-xs text-slate-500">
+                                        💡 Click &quot;Save Draft&quot; in the header to save your changes. Click &quot;Update Placeholders&quot; to regenerate the document with filled placeholders.
                                     </p>
-                                    <Separator className="my-4" />
-                                    {isDraft && isAuthor ? (
-                                        <textarea
-                                            className="w-full min-h-[400px] p-4 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700"
-                                            placeholder="Type your document content here..."
-                                            value={content}
-                                            onChange={(e) => setContent(e.target.value)}
-                                        />
-                                    ) : document.content ? (
-                                        <p className="text-slate-700 whitespace-pre-wrap">{document.content}</p>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div className="h-4 w-3/4 bg-slate-100 rounded" />
-                                            <div className="h-4 w-full bg-slate-100 rounded" />
-                                            <div className="h-4 w-5/6 bg-slate-100 rounded" />
-                                            <br />
-                                            <div className="h-4 w-full bg-slate-100 rounded" />
-                                            <div className="h-4 w-full bg-slate-100 rounded" />
-                                            <p className="text-sm text-slate-400 italic mt-8">
-                                                Document content will appear here when using templates...
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
                             </div>
                         </div>
-                    )}
+                    </div>
                 </main>
             </div>
 
