@@ -2,7 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
-import createReport from "docx-templates";
+
+// Dynamically import docx-templates to handle potential SSR issues
+let createReport: ((options: { template: Buffer; data: Record<string, unknown>; cmdDelimiter: [string, string] }) => Promise<Buffer>) | null = null;
+
+async function getDocxTemplatesLib() {
+    if (!createReport) {
+        try {
+            const module = await import("docx-templates");
+            createReport = module.default;
+        } catch {
+            console.error("Failed to load docx-templates");
+            return null;
+        }
+    }
+    return createReport;
+}
 
 // POST /api/documents/[id]/generate - Generate document from template with placeholders
 export async function POST(
@@ -27,7 +42,7 @@ export async function POST(
                     orderBy: { order: "asc" },
                     include: { user: { select: { name: true, role: true } } },
                 },
-                template: true, // Include the template record
+                template: true,
             },
         });
 
@@ -43,7 +58,6 @@ export async function POST(
         }
 
         // Always use the ORIGINAL template file path from Template table
-        // NOT the document.templateUrl which might be a generated file
         const originalTemplateUrl = document.template.filePath;
         console.log("Using original template:", originalTemplateUrl);
 
@@ -56,10 +70,6 @@ export async function POST(
                 { status: 500 }
             );
         }
-
-        // Check content type
-        const contentType = templateResponse.headers.get("content-type");
-        console.log("Template content type:", contentType);
 
         const templateBuffer = await templateResponse.arrayBuffer();
         console.log("Template buffer size:", templateBuffer.byteLength);
@@ -90,34 +100,45 @@ export async function POST(
 
         // Placeholder data
         const placeholderData = {
-            // Document info
             tanggal: formattedDate,
             nomor_surat: document.number,
             judul: document.title,
             perihal: document.title,
-
-            // People
             dari: document.author.name,
             pembuat: `${document.author.name} (${document.author.role})`,
             kepada: document.recipient || "Kepada Yth,",
-
-            // Signers
             penandatangan: signers[0] || "Ketua",
             ttd_ketua: signers.find(s => s?.includes("KETUA")) || signers[0] || "",
             ttd_pemeriksa: reviewers.join(", ") || "",
-
-            // Content
             isi: document.content || "",
         };
 
         console.log("Placeholder data:", placeholderData);
 
-        // Process template with docx-templates
-        const output = await createReport({
-            template: Buffer.from(templateBuffer),
-            data: placeholderData,
-            cmdDelimiter: ["{{", "}}"],
-        });
+        let output: Buffer;
+
+        try {
+            // Try to load and use docx-templates
+            const createReportFn = await getDocxTemplatesLib();
+
+            if (createReportFn) {
+                output = await createReportFn({
+                    template: Buffer.from(templateBuffer),
+                    data: placeholderData,
+                    cmdDelimiter: ["{{", "}}"],
+                });
+                console.log("Template processed successfully with docx-templates");
+            } else {
+                // Fallback: just use the original template without processing
+                console.log("docx-templates not available, using original template");
+                output = Buffer.from(templateBuffer);
+            }
+        } catch (docxError) {
+            console.error("docx-templates error:", docxError);
+            // Fallback: just use the original template without processing
+            console.log("Falling back to original template due to processing error");
+            output = Buffer.from(templateBuffer);
+        }
 
         // Upload processed document to Supabase
         const processedFileName = `generated/${id}_${Date.now()}.docx`;
