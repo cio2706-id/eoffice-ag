@@ -2,22 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
-
-// Dynamically import docx-templates to handle potential SSR issues
-let createReport: ((options: { template: Buffer; data: Record<string, unknown>; cmdDelimiter: [string, string] }) => Promise<Buffer>) | null = null;
-
-async function getDocxTemplatesLib() {
-    if (!createReport) {
-        try {
-            const module = await import("docx-templates");
-            createReport = module.default;
-        } catch {
-            console.error("Failed to load docx-templates");
-            return null;
-        }
-    }
-    return createReport;
-}
+import createReport from "docx-templates";
 
 // POST /api/documents/[id]/generate - Generate document from template with placeholders
 export async function POST(
@@ -115,29 +100,21 @@ export async function POST(
 
         console.log("Placeholder data:", placeholderData);
 
-        let output: Buffer;
+        let output: Uint8Array;
 
         try {
-            // Try to load and use docx-templates
-            const createReportFn = await getDocxTemplatesLib();
-
-            if (createReportFn) {
-                output = await createReportFn({
-                    template: Buffer.from(templateBuffer),
-                    data: placeholderData,
-                    cmdDelimiter: ["{{", "}}"],
-                });
-                console.log("Template processed successfully with docx-templates");
-            } else {
-                // Fallback: just use the original template without processing
-                console.log("docx-templates not available, using original template");
-                output = Buffer.from(templateBuffer);
-            }
+            // Process template with docx-templates
+            output = await createReport({
+                template: Buffer.from(templateBuffer),
+                data: placeholderData,
+                cmdDelimiter: ["{{", "}}"],
+            });
+            console.log("Template processed successfully with docx-templates");
         } catch (docxError) {
             console.error("docx-templates error:", docxError);
             // Fallback: just use the original template without processing
             console.log("Falling back to original template due to processing error");
-            output = Buffer.from(templateBuffer);
+            output = new Uint8Array(templateBuffer);
         }
 
         // Upload processed document to Supabase
