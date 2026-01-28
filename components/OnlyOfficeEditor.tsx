@@ -30,7 +30,7 @@ export default function OnlyOfficeEditor({
     userEmail = "anonymous@example.com",
     userName = "Anonymous",
 }: OnlyOfficeEditorProps) {
-    const editorRef = useRef<unknown>(null);
+    const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -38,52 +38,69 @@ export default function OnlyOfficeEditor({
         const onlyOfficeUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "https://office.projoffice.store";
         const scriptUrl = `${onlyOfficeUrl}/web-apps/apps/api/documents/api.js`;
 
-        const script = document.createElement("script");
-        script.src = scriptUrl;
-        script.async = true;
-        script.onload = initEditor;
-        document.body.appendChild(script);
+        let docEditor: any = null;
+
+        const init = () => {
+            if (!window.DocsAPI || !containerRef.current) return;
+
+            // Destroy existing editor if any to prevent duplicates
+            const existingFrame = document.querySelector("iframe[name='onlyoffice-editor']");
+            if (existingFrame) existingFrame.remove();
+
+            // Reset container content
+            containerRef.current.innerHTML = '<div id="onlyoffice-editor" class="w-full h-full"></div>';
+
+            const config = {
+                document: {
+                    fileType: documentType === "word" ? "docx" : documentType === "cell" ? "xlsx" : "pptx",
+                    key: documentKey,
+                    title: documentTitle,
+                    url: documentUrl,
+                },
+                documentType: documentType,
+                editorConfig: {
+                    mode: mode,
+                    callbackUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/api/onlyoffice/callback`,
+                    user: {
+                        id: userEmail,
+                        name: userName,
+                    },
+                    customization: {
+                        autosave: true,
+                        forcesave: true, // Adds Save button
+                        chat: false,
+                        comments: true,
+                    },
+                },
+                height: "100%",
+                width: "100%",
+            };
+
+            docEditor = new window.DocsAPI.DocEditor("onlyoffice-editor", config);
+            editorRef.current = docEditor;
+        };
+
+        // Check if script is already loaded
+        if (window.DocsAPI) {
+            init();
+        } else {
+            const script = document.createElement("script");
+            script.src = scriptUrl;
+            script.async = true;
+            script.onload = init;
+            document.body.appendChild(script);
+        }
 
         return () => {
-            document.body.removeChild(script);
+            if (docEditor && docEditor.destroyEditor) {
+                try {
+                    docEditor.destroyEditor();
+                } catch (e) {
+                    console.error("Failed to destroy editor", e);
+                }
+            }
         };
-    }, []);
-
-    function initEditor() {
-        if (!window.DocsAPI || !containerRef.current) return;
-
-        const config = {
-            document: {
-                fileType: documentType === "word" ? "docx" : documentType === "cell" ? "xlsx" : "pptx",
-                key: documentKey,
-                title: documentTitle,
-                url: documentUrl,
-            },
-            documentType: documentType,
-            editorConfig: {
-                mode: mode,
-                // Use current origin for callback (works both locally and in production)
-                callbackUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/api/onlyoffice/callback`,
-                user: {
-                    id: userEmail,
-                    name: userName,
-                },
-                customization: {
-                    autosave: true,
-                    chat: false,
-                    comments: true,
-                    feedback: false,
-                    forcesave: true,
-                    compactHeader: false,
-                    toolbarNoTabs: false,
-                },
-            },
-            height: "100%",
-            width: "100%",
-        };
-
-        editorRef.current = new window.DocsAPI.DocEditor("onlyoffice-editor", config);
-    }
+    }, [documentUrl, documentKey, documentTitle, documentType, mode, userEmail, userName]);
 
     return (
         <div ref={containerRef} className="w-full h-full">
