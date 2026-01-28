@@ -34,9 +34,12 @@ export default function OnlyOfficeEditor({
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Load OnlyOffice API script from cloud portal
+        // Load OnlyOffice API script from self-hosted server
+        const onlyOfficeUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "https://office.projoffice.store";
+        const scriptUrl = `${onlyOfficeUrl}/web-apps/apps/api/documents/api.js`;
+
         const script = document.createElement("script");
-        script.src = "https://aldicioschuurman2506301451.onlyoffice.com/web-apps/apps/api/documents/api.js";
+        script.src = scriptUrl;
         script.async = true;
         script.onload = initEditor;
         document.body.appendChild(script);

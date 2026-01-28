@@ -34,6 +34,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import OnlyOfficeEditor from "@/components/OnlyOfficeEditor";
 
 
 interface Document {
@@ -70,7 +71,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const [isSaving, setIsSaving] = useState(false);
     const [showRejectDialog, setShowRejectDialog] = useState(false);
     const [rejectComment, setRejectComment] = useState("");
-    const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: string } | null>(null);
+    const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
 
     const userRole = currentUser?.role;
 
@@ -456,89 +457,50 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                         </div>
                     )}
 
-                    {/* The Editor - Simple Textarea for content editing */}
-                    <div className="w-[816px] min-h-[1056px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 dark:bg-white dark:ring-slate-800">
-                        <div className="w-full h-full flex flex-col">
-                            {/* Header with Title and Actions */}
-                            <div className="h-auto border-b bg-[#f9fbfd] p-4 flex flex-col gap-2">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-slate-800">{document.title}</h2>
-                                        <p className="text-xs text-slate-500">
-                                            {document.number} • Created by {document.author.name}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {hasTemplate && document.templateUrl && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <a href={document.templateUrl} target="_blank" download>
-                                                    <Download size={14} className="mr-1" />
-                                                    Download Document
-                                                </a>
-                                            </Button>
-                                        )}
-                                        {hasTemplate && isAuthor && isDraft && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleRegenerate}
-                                                disabled={isActing}
-                                            >
-                                                {isActing ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
-                                                Update Placeholders
-                                            </Button>
-                                        )}
+                    {/* The Editor - OnlyOffice */}
+                    {document.templateUrl ? (
+                        <div className="w-full h-[800px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 overflow-hidden">
+                            <OnlyOfficeEditor
+                                documentUrl={document.templateUrl}
+                                documentKey={`doc_${document.id}_${Date.now()}`} // Unique key to force reload if needed
+                                documentTitle={document.title}
+                                documentType="word"
+                                mode={isDraft && isAuthor ? "edit" : "view"}
+                                userEmail={currentUser?.email || "user@example.com"}
+                                userName={currentUser?.name || "User"}
+                            />
+                        </div>
+                    ) : (
+                        <div className="w-[816px] min-h-[1056px] bg-white shadow-2xl rounded-sm ring-1 ring-slate-200 dark:bg-white dark:ring-slate-800">
+                            <div className="w-full h-full flex flex-col">
+                                {/* Header with Title and Actions */}
+                                <div className="h-auto border-b bg-[#f9fbfd] p-4 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h2 className="text-lg font-semibold text-slate-800">{document.title}</h2>
+                                            <p className="text-xs text-slate-500">
+                                                {document.number} • Created by {document.author.name}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                                {hasTemplate && (
-                                    <div className="text-xs text-indigo-600 bg-indigo-50 px-3 py-2 rounded-md">
-                                        📄 This document uses a template. Edit the content below, then click &quot;Update Placeholders&quot; to regenerate the document with your changes.
-                                    </div>
-                                )}
-                            </div>
 
-                            {/* Content Editor */}
-                            <div className="p-8 space-y-4 flex-1">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Isi Surat (Document Content)
-                                </label>
-                                {isDraft && isAuthor ? (
-                                    <textarea
-                                        className="w-full min-h-[500px] p-4 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 leading-relaxed"
-                                        placeholder="Ketik isi surat di sini...
-
-Contoh:
-Dengan hormat,
-
-Bersama surat ini kami sampaikan bahwa...
-
-Demikian surat ini kami sampaikan, atas perhatian dan kerjasamanya kami ucapkan terima kasih."
-                                        value={content}
-                                        onChange={(e) => setContent(e.target.value)}
-                                    />
-                                ) : document.content ? (
-                                    <div className="p-4 border rounded-lg bg-slate-50">
-                                        <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{document.content}</p>
-                                    </div>
-                                ) : (
-                                    <div className="p-4 border rounded-lg bg-slate-50 text-slate-400 italic">
-                                        Belum ada isi surat...
-                                    </div>
-                                )}
-
-                                {/* Save reminder */}
-                                {isDraft && isAuthor && (
-                                    <p className="text-xs text-slate-500">
-                                        💡 Click &quot;Save Draft&quot; in the header to save your changes. Click &quot;Update Placeholders&quot; to regenerate the document with filled placeholders.
-                                    </p>
-                                )}
+                                {/* Content Editor (Fallback for non-template docs) */}
+                                <div className="p-12 space-y-4 flex-1">
+                                    {isDraft && isAuthor ? (
+                                        <textarea
+                                            className="w-full min-h-[400px] p-4 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700"
+                                            placeholder="Type your document content here..."
+                                            value={content}
+                                            onChange={(e) => setContent(e.target.value)}
+                                        />
+                                    ) : (
+                                        <p className="text-slate-700 whitespace-pre-wrap">{document.content || "No content"}</p>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </main>
             </div>
 
