@@ -1,0 +1,7 @@
+projoffice.store {
+    reverse_proxy app:3000
+}
+
+office.projoffice.store {
+    reverse_proxy onlyoffice:80
+}
